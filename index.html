@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NHS Content Checker</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #f0f4f5; color: #212b32; min-height: 100vh; }
+
+  /* Header */
+  .header { background: #005eb8; padding: 18px 24px; display: flex; align-items: center; gap: 14px; }
+  .header-logo { background: transparent; border-radius: 4px; height: 40px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .header-title { color: #fff; font-size: 19px; font-weight: 700; line-height: 1.2; }
+  .header-sub { color: #99c7eb; font-size: 12px; margin-top: 2px; }
+
+  /* Layout */
+  .container { max-width: 820px; margin: 0 auto; padding: 24px 20px 60px; }
+  .card { background: #fff; border: 1px solid #d8dde0; border-radius: 4px; padding: 18px 22px; margin-bottom: 18px; }
+
+  /* API key section */
+  .api-section { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 22px; }
+  .api-section label { font-size: 14px; font-weight: 700; display: block; margin-bottom: 4px; }
+  .api-section .hint { font-size: 12px; color: #4c6272; margin-bottom: 4px; }
+  .api-input { border: 2px solid #4c6272; border-radius: 4px; padding: 10px 14px; font-size: 14px; font-family: Arial, sans-serif; width: 100%; max-width: 420px; outline: none; transition: border-color 0.15s; }
+  .api-input:focus { border-color: #005eb8; }
+  .api-saved { display: inline-block; font-size: 13px; color: #007f3b; font-weight: 600; margin-left: 8px; opacity: 0; transition: opacity 0.3s; }
+  .api-saved.show { opacity: 1; }
+
+  /* Textarea */
+  .content-label { font-size: 16px; font-weight: 700; margin-bottom: 6px; display: block; }
+  .content-area { width: 100%; border: 2px solid #4c6272; border-radius: 4px; padding: 14px 16px; font-size: 15px; line-height: 1.7; font-family: Arial, sans-serif; resize: vertical; outline: none; transition: border-color 0.15s; }
+  .content-area:focus { border-color: #005eb8; }
+
+  /* Button row */
+  .btn-row { display: flex; align-items: center; gap: 16px; margin-top: 10px; flex-wrap: wrap; }
+  .btn-check { background: #005eb8; color: #fff; border: none; border-radius: 4px; padding: 12px 28px; font-size: 16px; font-weight: 700; cursor: pointer; font-family: Arial, sans-serif; box-shadow: 0 4px 0 #003d78; position: relative; top: -2px; transition: background 0.15s; }
+  .btn-check:hover { background: #004c97; }
+  .btn-check:disabled { background: #768692; cursor: not-allowed; box-shadow: none; top: 0; }
+  .word-count { font-size: 13px; color: #768692; }
+
+  /* Loading */
+  .loading-box { text-align: center; padding: 44px 20px; background: #fff; border-radius: 4px; border: 1px solid #d8dde0; margin-top: 22px; }
+  .spinner { width: 36px; height: 36px; border: 4px solid #e8edee; border-top-color: #005eb8; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 14px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-msg { font-size: 15px; color: #4c6272; font-weight: 600; }
+
+  /* Error */
+  .error-box { background: #fce5e3; border: 1px solid #d5281b; border-radius: 4px; padding: 16px 20px; margin-top: 22px; font-size: 14px; line-height: 1.6; }
+  .error-box strong { color: #d5281b; }
+  .error-hint { margin-top: 10px; font-size: 13px; color: #4c6272; }
+
+  /* Results grid */
+  .results { margin-top: 26px; }
+  .top-grid { display: grid; grid-template-columns: 180px 1fr; gap: 16px; margin-bottom: 18px; }
+  @media (max-width: 600px) { .top-grid { grid-template-columns: 1fr; } }
+  .score-card { background: #fff; border: 1px solid #d8dde0; border-radius: 4px; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .badge-row { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
+  .badge { font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 3px; }
+  .badge-high { background: #fce5e3; color: #d5281b; }
+  .badge-med { background: #fef4e6; color: #d07b00; }
+  .badge-low { background: #e6f0fa; color: #005eb8; }
+
+  /* Category bars */
+  .cat-card { background: #fff; border: 1px solid #d8dde0; border-radius: 4px; padding: 16px 20px; }
+  .cat-title { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+  .cat-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f0f4f5; }
+  .cat-icon { font-size: 18px; width: 28px; text-align: center; }
+  .cat-info { flex: 1; min-width: 0; }
+  .cat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .cat-label { font-size: 14px; font-weight: 600; color: #212b32; }
+  .cat-score { font-size: 13px; font-weight: 700; }
+  .cat-bar-bg { height: 6px; background: #e8edee; border-radius: 3px; overflow: hidden; }
+  .cat-bar-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+  .cat-issues { font-size: 12px; color: #768692; margin-top: 3px; }
+
+  /* Stats grid */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .stat-box { background: #fff; border: 1px solid #d8dde0; border-radius: 4px; padding: 14px; text-align: center; }
+  .stat-val { font-size: 22px; font-weight: 700; color: #005eb8; }
+  .stat-label { font-size: 12px; color: #4c6272; margin-top: 3px; }
+
+  /* Warning boxes */
+  .warnings { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .warn-box { flex: 1; min-width: 200px; border-radius: 4px; padding: 12px 16px; font-size: 13px; color: #212b32; }
+  .warn-jargon { background: #fef4e6; border: 1px solid #d07b00; }
+  .warn-contract { background: #fce5e3; border: 1px solid #d5281b; }
+
+  /* Filters */
+  .filters { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; margin-top: 24px; flex-wrap: wrap; }
+  .filters h2 { font-size: 17px; font-weight: 700; }
+  .filter-select { border: 2px solid #4c6272; border-radius: 4px; padding: 6px 10px; font-size: 14px; font-family: Arial, sans-serif; background: #fff; color: #212b32; cursor: pointer; outline: none; }
+  .filter-count { font-size: 13px; color: #768692; }
+
+  /* Issue cards */
+  .issue-card { border: 1px solid #d8dde0; border-radius: 4px; padding: 16px 20px; margin-bottom: 10px; background: #fff; }
+  .issue-badges { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .sev-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .cat-badge { background: #f0f4f5; color: #4c6272; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 3px; }
+  .issue-rule { font-size: 13px; font-weight: 700; color: #212b32; }
+  .issue-quote { background: #f0f4f5; border-radius: 4px; padding: 10px 14px; margin: 8px 0; font-style: italic; color: #4c6272; font-size: 14px; line-height: 1.6; border-left: 3px solid #aeb7bd; }
+  .issue-explain { font-size: 14px; color: #4c6272; margin: 8px 0; line-height: 1.6; }
+  .issue-suggestion { background: #e7f6ee; border-radius: 4px; padding: 10px 14px; font-size: 14px; color: #005eb8; line-height: 1.6; border-left: 3px solid #007f3b; }
+  .issue-suggestion strong { color: #007f3b; }
+
+  /* No issues / strengths */
+  .no-issues { background: #e7f6ee; border: 1px solid #007f3b; border-radius: 4px; padding: 20px; text-align: center; margin-top: 16px; }
+  .no-issues-icon { font-size: 28px; }
+  .no-issues-text { font-size: 16px; font-weight: 700; color: #007f3b; margin-top: 8px; }
+  .strengths h2 { font-size: 17px; font-weight: 700; margin: 0 0 10px; }
+  .strength-item { display: flex; gap: 10px; align-items: baseline; font-size: 14px; color: #4c6272; line-height: 1.7; margin-bottom: 5px; }
+  .strength-check { color: #007f3b; font-weight: 700; flex-shrink: 0; }
+  .empty-filter { background: #fff; border: 1px solid #d8dde0; border-radius: 4px; padding: 20px; text-align: center; color: #768692; font-size: 14px; }
+
+  /* Footer */
+  .footer-ref { margin-top: 24px; padding: 14px 18px; background: #e6f0fa; border-radius: 4px; font-size: 13px; color: #4c6272; line-height: 1.6; }
+
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-logo">
+    <img src="data:image/png;base64,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" alt="NHS" style="height:32px;border-radius:4px;" />
+  </div>
+  <div>
+    <div class="header-title">NHS Content Checker</div>
+    <div class="header-sub">Voice, tone, formatting, punctuation, numbers, inclusivity, health literacy</div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Intro -->
+  <div class="card">
+    <p style="font-size:15px;color:#4c6272;line-height:1.7;">
+      Paste your content below to check it against <strong style="color:#005eb8">7 areas</strong> of the
+      <strong style="color:#005eb8">NHS digital service manual</strong>: voice &amp; tone, writing style,
+      formatting, punctuation, numbers/dates/time, inclusive content, and health literacy.
+    </p>
+  </div>
+
+  <!-- API key -->
+  <div class="card">
+    <div class="api-section">
+      <div style="flex:1;min-width:280px;">
+        <label for="apiKey">Anthropic API key</label>
+        <div class="hint">Your key is stored in your browser only and never sent anywhere except the Anthropic API. <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:#005eb8;">Get a key</a></div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+          <input type="password" id="apiKey" class="api-input" placeholder="sk-ant-..." />
+          <span id="apiSaved" class="api-saved">✓ Saved</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Input -->
+  <label class="content-label" for="contentInput">Your content</label>
+  <textarea id="contentInput" class="content-area" rows="10" placeholder="Paste your NHS content here..."></textarea>
+
+  <!-- Context -->
+  <div style="margin-top:16px;">
+    <label class="content-label" for="contextInput">Context <span style="font-weight:400;color:#4c6272;font-size:14px;">(optional)</span></label>
+    <div style="font-size:13px;color:#4c6272;margin-bottom:6px;line-height:1.5;">
+      Give extra context to get more relevant feedback — for example: "this is a page title", "which of these two options is better", "this is an error message for a form", "this will appear on the homepage for diabetes information".
+    </div>
+    <textarea id="contextInput" class="content-area" rows="3" placeholder='E.g. "This is a heading for the appointments section" or "Which option fits NHS guidelines better: A or B?"' style="font-size:14px;"></textarea>
+  </div>
+
+  <div class="btn-row">
+    <button id="checkBtn" class="btn-check" disabled>Check content</button>
+    <span id="wordCount" class="word-count">0 words</span>
+  </div>
+
+  <!-- Loading -->
+  <div id="loadingBox" class="loading-box hidden">
+    <div class="spinner"></div>
+    <div id="loadingMsg" class="loading-msg">Reading your content…</div>
+  </div>
+
+  <!-- Error -->
+  <div id="errorBox" class="error-box hidden">
+    <strong>Error: </strong><span id="errorMsg"></span>
+    <div class="error-hint">If this keeps happening, try shortening your content or refreshing the page.</div>
+  </div>
+
+  <!-- Results -->
+  <div id="results" class="results hidden"></div>
+
+</div>
+
+<script>
+// ─── Config ───
+const CATEGORY_META = {
+  voiceAndTone:    { label: "Voice & Tone",          icon: "🗣" },
+  writingStyle:    { label: "Writing Style",         icon: "✏️" },
+  formatting:      { label: "Formatting",            icon: "📐" },
+  punctuation:     { label: "Punctuation",           icon: "📝" },
+  numbersDatesTime:{ label: "Numbers, Dates & Time", icon: "🔢" },
+  inclusiveContent:{ label: "Inclusive Content",      icon: "🤝" },
+  healthLiteracy:  { label: "Health Literacy",        icon: "📖" },
+};
+
+const SEVERITY = {
+  high:   { label: "High",   color: "#d5281b", bg: "#fce5e3" },
+  medium: { label: "Medium", color: "#d07b00", bg: "#fef4e6" },
+  low:    { label: "Low",    color: "#005eb8", bg: "#e6f0fa" },
+};
+
+const SYSTEM_MSG = `You are an NHS content checker. Analyse text against the NHS digital service manual. Be specific: cite exact phrases, explain which rule is broken, and give actionable rewrites.
+
+RULES:
+CATEGORY 1 – VOICE & TONE: Voice is neutral, factual, authoritative, calm, reassuring. Empowering not patronising, personal not formal. Address user as 'you'. Empower: 'talk to your doctor about...' NOT 'your doctor will tell you about...'. NEVER use 'should' — it sounds patronising. Tone adapts: serious/reassuring for diagnoses; encouraging/conversational for lifestyle.
+
+CATEGORY 2 – WRITING STYLE: ACCURATE: Factual, neutral, unambiguous. No metaphors. Avoid subjective words ('good','bad','easy') unless evidence-based. Be precise: '250ml glass' not 'a large glass'. CLEAR: Plain English, reading age 9-11. Avoid jargon; if medical term needed, plain English first: 'piles (haemorrhoids)'. Prefer 'have'/'get' over 'experience'. CONCISE: Sentences max 20 words. Paragraphs max 3 sentences. Active voice: 'find a pharmacy' not 'a pharmacy can be found'.
+
+CATEGORY 3 – FORMATTING: Explain abbreviations on first use (unless UK, NHS, GP). Bold only in technical instructions, NEVER for emphasis. No italics, no underlining. Headings: sentence case, clear, concise, action-oriented, not questions, correct nesting (h1>h2>h3>h4). Links: specific text describing destination, NEVER 'click here'. Lists: max 6 items; lead-in lists use colon, lowercase bullets, no end punctuation; full-sentence lists use capitals and full stops.
+
+CATEGORY 4 – PUNCTUATION: Sentence case always, including titles. NEVER block capitals. Generic drugs lowercase, brand names capitalised. Conditions lowercase unless proper name (Alzheimer's disease vs cancer). USE positive contractions (you'll, we'll). DO NOT use negative contractions: write 'do not' not 'don't', 'cannot' not 'can't'. Avoid should've, could've, would've. Hyphens only when confusing without. Use 'to' for ranges not dashes.
+
+CATEGORY 5 – NUMBERS, DATES & TIME: Use numerals for all numbers including 1,2. Comma for 1,000+. Spell out 'one' when meaning 'a'. No space between number and unit: 250mg, 2500kcal. Dates: '6 August 2018', months in full. Time: 5pm not 5.00pm. Ranges with 'to': '2pm to 6pm'. Prefer '1 in 7' over '14.3%'. Spell out common fractions.
+
+CATEGORY 6 – INCLUSIVE CONTENT: Say 'people with diabetes' not 'diabetic person'. NEVER: 'suffering from', 'afflicted by', 'victim of', 'confined to wheelchair', 'mentally ill'. Use 'mental health condition'. NEVER: 'elderly', 'OAP', 'pensioner', 'senior' — use 'adults aged 65 and over'. Gender-neutral: use 'you'/'they' not 'he'/'she'. Use 'ethnicity' not 'race'. Use 'ethnic minorities' not 'BAME'/'BME'.
+
+CATEGORY 7 – HEALTH LITERACY: Reading age 9-11. Avoid complex sentences. Put numbers in context. Explain jargon immediately. Front-load key info. Do not assume medical knowledge. Consider users with low numeracy.
+
+RESPONSE: Return ONLY a JSON object (no markdown fences, no preamble). Schema:
+{"overallScore":<0-100>,"summary":"<2 sentences>","categories":{"voiceAndTone":{"score":<0-100>,"issueCount":<n>},"writingStyle":{"score":<0-100>,"issueCount":<n>},"formatting":{"score":<0-100>,"issueCount":<n>},"punctuation":{"score":<0-100>,"issueCount":<n>},"numbersDatesTime":{"score":<0-100>,"issueCount":<n>},"inclusiveContent":{"score":<0-100>,"issueCount":<n>},"healthLiteracy":{"score":<0-100>,"issueCount":<n>}},"issues":[{"category":"voiceAndTone"|"writingStyle"|"formatting"|"punctuation"|"numbersDatesTime"|"inclusiveContent"|"healthLiteracy","rule":"<rule>","severity":"high"|"medium"|"low","quote":"<exact text>","explanation":"<why>","suggestion":"<rewrite>"}],"strengths":["<str>"],"readability":{"avgSentenceLength":<n>,"longSentences":<n>,"passiveVoiceCount":<n>,"jargonTerms":["<term>"],"negativeContractions":["<term>"]}}
+
+RULES FOR RESPONSE:
+- Only flag genuine issues. Score 100 if no issues in a category.
+- Check ALL 7 categories. Max 20 issues, prioritise high severity.
+- For short texts some categories may not apply — score 100.
+- If the user provides CONTEXT, use it to tailor your analysis. For example: if they say it is a heading, apply heading rules specifically; if they ask which option is better, compare options A and B and recommend which is more NHS-compliant (add a "recommendation" field to the JSON with your verdict); if they say it is an error message, focus on clarity and tone.
+- If comparing options, still analyse ALL content provided, but add: "recommendation":"<which option and why>" to the top level of the JSON.
+- ONLY output JSON. No other text.`;
+
+const LOADING_MESSAGES = [
+  "Reading your content…", "Checking voice and tone…", "Reviewing formatting…",
+  "Scanning punctuation…", "Checking numbers and dates…",
+  "Evaluating inclusive language…", "Assessing health literacy…", "Preparing your report…"
+];
+
+// ─── DOM refs ───
+const apiKeyInput   = document.getElementById("apiKey");
+const apiSaved      = document.getElementById("apiSaved");
+const contentInput  = document.getElementById("contentInput");
+const contextInput  = document.getElementById("contextInput");
+const checkBtn      = document.getElementById("checkBtn");
+const wordCountEl   = document.getElementById("wordCount");
+const loadingBox    = document.getElementById("loadingBox");
+const loadingMsgEl  = document.getElementById("loadingMsg");
+const errorBox      = document.getElementById("errorBox");
+const errorMsgEl    = document.getElementById("errorMsg");
+const resultsEl     = document.getElementById("results");
+
+// ─── State ───
+let currentResult = null;
+let loadingInterval = null;
+
+// ─── API key persistence ───
+const savedKey = localStorage.getItem("nhs_checker_api_key");
+if (savedKey) apiKeyInput.value = savedKey;
+
+apiKeyInput.addEventListener("input", () => {
+  const key = apiKeyInput.value.trim();
+  if (key) {
+    localStorage.setItem("nhs_checker_api_key", key);
+    apiSaved.classList.add("show");
+    setTimeout(() => apiSaved.classList.remove("show"), 2000);
+  } else {
+    localStorage.removeItem("nhs_checker_api_key");
+  }
+  updateBtnState();
+});
+
+// ─── Word count + button state ───
+contentInput.addEventListener("input", () => {
+  const words = contentInput.value.trim() ? contentInput.value.trim().split(/\s+/).length : 0;
+  wordCountEl.textContent = `${words} word${words !== 1 ? "s" : ""}`;
+  updateBtnState();
+});
+
+function updateBtnState() {
+  checkBtn.disabled = !contentInput.value.trim() || !apiKeyInput.value.trim();
+}
+updateBtnState();
+
+// ─── JSON extraction ───
+function extractJSON(str) {
+  try { return JSON.parse(str); } catch {}
+  const cleaned = str.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
+  try { return JSON.parse(cleaned); } catch {}
+  const s = str.indexOf("{"), e = str.lastIndexOf("}");
+  if (s !== -1 && e > s) { try { return JSON.parse(str.slice(s, e + 1)); } catch {} }
+  return null;
+}
+
+// ─── Score ring SVG ───
+function scoreRingSVG(score, size = 140, sw = 10, fs = 32) {
+  const r = (size - sw) / 2 - 2;
+  const circ = 2 * Math.PI * r;
+  const off = circ - (score / 100) * circ;
+  const col = score >= 80 ? "#007f3b" : score >= 55 ? "#d07b00" : "#d5281b";
+  const c = size / 2;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="#e8edee" stroke-width="${sw}"/>
+    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${col}" stroke-width="${sw}"
+      stroke-dasharray="${circ}" stroke-dashoffset="${off}" stroke-linecap="round"
+      transform="rotate(-90 ${c} ${c})" style="transition:stroke-dashoffset 0.8s ease"/>
+    <text x="${c}" y="${c - 4}" text-anchor="middle" dominant-baseline="middle"
+      style="font-size:${fs}px;font-weight:700;fill:${col};font-family:Arial,sans-serif">${score}</text>
+    <text x="${c}" y="${c + fs / 1.6}" text-anchor="middle"
+      style="font-size:12px;fill:#4c6272;font-family:Arial,sans-serif">/ 100</text>
+  </svg>`;
+}
+
+// ─── Escape HTML ───
+function esc(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ─── Colour helper ───
+function scoreCol(s) { return s >= 80 ? "#007f3b" : s >= 55 ? "#d07b00" : "#d5281b"; }
+
+// ─── Render results ───
+function renderResults(data) {
+  currentResult = data;
+  const issues = data.issues || [];
+  const high = issues.filter(i => i.severity === "high").length;
+  const med  = issues.filter(i => i.severity === "medium").length;
+  const low  = issues.filter(i => i.severity === "low").length;
+  const rd   = data.readability || {};
+
+  let html = "";
+
+  // Top grid: score + categories
+  html += `<div class="top-grid">`;
+  html += `<div class="score-card">${scoreRingSVG(data.overallScore || 0)}
+    <div class="badge-row">
+      ${high ? `<span class="badge badge-high">${high} high</span>` : ""}
+      ${med  ? `<span class="badge badge-med">${med} med</span>` : ""}
+      ${low  ? `<span class="badge badge-low">${low} low</span>` : ""}
+    </div></div>`;
+
+  html += `<div class="cat-card"><div class="cat-title">Category scores</div>`;
+  for (const [k, m] of Object.entries(CATEGORY_META)) {
+    const d = (data.categories || {})[k] || {};
+    const sc = d.score ?? 100, cnt = d.issueCount ?? 0, col = scoreCol(sc);
+    html += `<div class="cat-row">
+      <span class="cat-icon">${m.icon}</span>
+      <div class="cat-info">
+        <div class="cat-header">
+          <span class="cat-label">${m.label}</span>
+          <span class="cat-score" style="color:${col}">${sc}</span>
+        </div>
+        <div class="cat-bar-bg"><div class="cat-bar-fill" style="width:${sc}%;background:${col}"></div></div>
+        ${cnt > 0 ? `<div class="cat-issues">${cnt} issue${cnt !== 1 ? "s" : ""}</div>` : ""}
+      </div></div>`;
+  }
+  html += `</div></div>`;
+
+  // Summary
+  html += `<div class="card"><div style="font-size:15px;font-weight:700;margin-bottom:6px">Summary</div>
+    <p style="font-size:14px;color:#4c6272;line-height:1.7">${esc(data.summary || "")}</p></div>`;
+
+  // Recommendation (shown when comparing options)
+  if (data.recommendation) {
+    html += `<div class="card" style="border-left:4px solid #007f3b;background:#f0fff5;">
+      <div style="font-size:15px;font-weight:700;margin-bottom:6px;color:#007f3b">💡 Recommendation</div>
+      <p style="font-size:14px;color:#212b32;line-height:1.7">${esc(data.recommendation)}</p></div>`;
+  }
+
+  // Readability stats
+  html += `<div class="stats-grid">`;
+  const stats = [
+    { label: "Avg sentence length", val: `${rd.avgSentenceLength ?? "—"} words` },
+    { label: "Long sentences (20+)", val: rd.longSentences ?? 0 },
+    { label: "Passive voice",        val: rd.passiveVoiceCount ?? 0 },
+    { label: "Jargon terms",         val: (rd.jargonTerms || []).length },
+    { label: "Negative contractions", val: (rd.negativeContractions || []).length },
+  ];
+  for (const s of stats) {
+    html += `<div class="stat-box"><div class="stat-val">${s.val}</div><div class="stat-label">${s.label}</div></div>`;
+  }
+  html += `</div>`;
+
+  // Warnings
+  const hasJargon = (rd.jargonTerms || []).length > 0;
+  const hasContr  = (rd.negativeContractions || []).length > 0;
+  if (hasJargon || hasContr) {
+    html += `<div class="warnings">`;
+    if (hasJargon) html += `<div class="warn-box warn-jargon"><strong>Jargon detected: </strong>${esc(rd.jargonTerms.join(", "))}</div>`;
+    if (hasContr) html += `<div class="warn-box warn-contract"><strong>Negative contractions: </strong>${esc(rd.negativeContractions.join(", "))}<span style="color:#4c6272"> — NHS style uses "do not", "cannot"</span></div>`;
+    html += `</div>`;
+  }
+
+  // Issues section with filters
+  if (issues.length > 0) {
+    html += `<div class="filters">
+      <h2>Issues (${issues.length})</h2>
+      <select id="filterCat" class="filter-select" onchange="applyFilters()">
+        <option value="all">All categories</option>
+        ${Object.entries(CATEGORY_META).map(([k, m]) => `<option value="${k}">${m.label}</option>`).join("")}
+      </select>
+      <select id="filterSev" class="filter-select" onchange="applyFilters()">
+        <option value="all">All severities</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+      <span id="filterInfo" class="filter-count"></span>
+    </div>`;
+    html += `<div id="issuesList"></div>`;
+  } else {
+    html += `<div class="no-issues"><span class="no-issues-icon">✅</span><div class="no-issues-text">No issues found — great work!</div></div>`;
+  }
+
+  // Strengths
+  if ((data.strengths || []).length > 0) {
+    html += `<div class="card strengths" style="margin-top:18px"><h2>Strengths</h2>`;
+    for (const s of data.strengths) {
+      html += `<div class="strength-item"><span class="strength-check">✓</span><span>${esc(s)}</span></div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Footer
+  html += `<div class="footer-ref">Based on the <strong>NHS digital service manual</strong> content guide: voice &amp; tone, how we write, formatting, punctuation, numbers/measurements/dates/time, inclusive content, and health literacy.</div>`;
+
+  resultsEl.innerHTML = html;
+  resultsEl.classList.remove("hidden");
+
+  if (issues.length > 0) applyFilters();
+
+  setTimeout(() => resultsEl.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+}
+
+// ─── Filter + render issues ───
+function applyFilters() {
+  if (!currentResult) return;
+  const cat = document.getElementById("filterCat").value;
+  const sev = document.getElementById("filterSev").value;
+  const all = currentResult.issues || [];
+  const sevOrder = { high: 0, medium: 1, low: 2 };
+
+  const filtered = all
+    .filter(i => cat === "all" || i.category === cat)
+    .filter(i => sev === "all" || i.severity === sev)
+    .sort((a, b) => (sevOrder[a.severity] ?? 3) - (sevOrder[b.severity] ?? 3));
+
+  const info = document.getElementById("filterInfo");
+  if (cat !== "all" || sev !== "all") {
+    info.textContent = `Showing ${filtered.length} of ${all.length}`;
+  } else {
+    info.textContent = "";
+  }
+
+  const container = document.getElementById("issuesList");
+  if (filtered.length === 0) {
+    container.innerHTML = `<div class="empty-filter">No issues match this filter.</div>`;
+    return;
+  }
+
+  let html = "";
+  for (const issue of filtered) {
+    const sv = SEVERITY[issue.severity] || SEVERITY.medium;
+    const cm = CATEGORY_META[issue.category];
+    html += `<div class="issue-card" style="border-left:4px solid ${sv.color}">
+      <div class="issue-badges">
+        <span class="sev-badge" style="background:${sv.bg};color:${sv.color}">${sv.label}</span>
+        ${cm ? `<span class="cat-badge">${cm.icon} ${cm.label}</span>` : ""}
+        <span class="issue-rule">${esc(issue.rule)}</span>
+      </div>
+      <div class="issue-quote">"${esc(issue.quote)}"</div>
+      <p class="issue-explain">${esc(issue.explanation)}</p>
+      ${issue.suggestion ? `<div class="issue-suggestion"><strong>Suggested rewrite: </strong>${esc(issue.suggestion)}</div>` : ""}
+    </div>`;
+  }
+  container.innerHTML = html;
+}
+
+// ─── Build user message with optional context ───
+function buildUserMessage(text) {
+  const ctx = contextInput.value.trim();
+  let msg = "Analyse this content against ALL 7 NHS content guide categories. Return only JSON.";
+  if (ctx) {
+    msg += "\n\nCONTEXT FROM USER: " + ctx;
+  }
+  msg += "\n\nCONTENT:\n" + text;
+  return msg;
+}
+
+// ─── Check content ───
+checkBtn.addEventListener("click", async () => {
+  const text = contentInput.value.trim();
+  const apiKey = apiKeyInput.value.trim();
+  if (!text || !apiKey) return;
+
+  // Show loading
+  checkBtn.disabled = true;
+  checkBtn.textContent = "Checking…";
+  errorBox.classList.add("hidden");
+  resultsEl.classList.add("hidden");
+  loadingBox.classList.remove("hidden");
+
+  let msgIdx = 0;
+  loadingMsgEl.textContent = LOADING_MESSAGES[0];
+  loadingInterval = setInterval(() => {
+    msgIdx = (msgIdx + 1) % LOADING_MESSAGES.length;
+    loadingMsgEl.textContent = LOADING_MESSAGES[msgIdx];
+  }, 1800);
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 4000,
+        system: SYSTEM_MSG,
+        messages: [{ role: "user", content: buildUserMessage(text) }]
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `API returned status ${res.status}`);
+    }
+
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message || "API returned an error");
+
+    const raw = (data.content || []).map(b => b.text || "").join("");
+    if (!raw) throw new Error("The API returned an empty response. Please try again.");
+
+    const parsed = extractJSON(raw);
+    if (!parsed) throw new Error("Could not parse the analysis. Please try again.");
+
+    renderResults(parsed);
+
+  } catch (e) {
+    console.error("NHS Checker error:", e);
+    errorMsgEl.textContent = e.message || "Something went wrong. Please try again.";
+    errorBox.classList.remove("hidden");
+  } finally {
+    clearInterval(loadingInterval);
+    loadingBox.classList.add("hidden");
+    checkBtn.disabled = false;
+    checkBtn.textContent = "Check content";
+    updateBtnState();
+  }
+});
+</script>
+</body>
+</html>
